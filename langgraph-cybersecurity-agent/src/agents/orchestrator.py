@@ -4,7 +4,7 @@
 """
 from typing import Dict, Any, List
 from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
+from .llm_factory import create_llm
 from .security_analysis import SecurityAnalysisAgent
 from .knowledge import KnowledgeAgent
 from .file_understanding import FileUnderstandingAgent
@@ -15,11 +15,7 @@ class OrchestratorAgent:
     """编排智能体类"""
     
     def __init__(self):
-        self.llm = ChatOpenAI(
-            model=config.MODEL_NAME,
-            temperature=0.1,
-            api_key=config.OPENAI_API_KEY
-        )
+        self.llm = create_llm(temperature=0.1)
         
         # 初始化各个专业智能体
         self.security_agent = SecurityAnalysisAgent()
@@ -93,6 +89,173 @@ class OrchestratorAgent:
                 "tasks": [],
                 "result_combination_strategy": f"执行计划生成异常：{str(e)}"
             }
+    
+    def create_dynamic_graph(self, query: str, intent_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        根据意图动态创建执行图
+        
+        Args:
+            query: 用户查询
+            intent_info: 意图分析信息
+            
+        Returns:
+            动态执行图配置
+        """
+        # 使用LLM来生成更复杂的动态任务图
+        planning_prompt = f"""
+        你是一个高级任务编排智能体。根据用户的查询和意图分析，你需要设计一个最优的任务执行图。
+        
+        用户查询: {query}
+        意图分析: {intent_info}
+        
+        可用的智能体:
+        1. SecurityAnalysisAgent - 用于威胁分析、漏洞评估、防护策略生成
+        2. KnowledgeAgent - 用于查询网络安全知识、ATT&CK框架、CVE信息等
+        3. FileUnderstandingAgent - 用于理解和分析上传的文件
+        
+        请设计一个任务执行图，考虑以下因素：
+        - 任务之间的依赖关系
+        - 是否需要并行执行某些任务
+        - 任务的执行顺序
+        - 如何组合最终结果
+        
+        请严格按照以下JSON格式返回:
+        {{
+            "tasks": [
+                {{
+                    "id": "唯一任务ID",
+                    "agent": "智能体名称",
+                    "action": "具体操作",
+                    "input": "传递给智能体的输入",
+                    "dependencies": ["依赖的其他任务ID列表"]
+                }}
+            ],
+            "result_combination_strategy": "描述如何组合结果"
+        }}
+        """
+        
+        try:
+            # 使用LLM来规划复杂任务
+            llm_response = self.llm.invoke(planning_prompt)
+            response_text = llm_response.content.strip()
+            
+            # 尝试解析JSON格式的响应
+            if response_text.startswith('{') and response_text.endswith('}'):
+                import json
+                try:
+                    parsed_plan = json.loads(response_text)
+                    return parsed_plan
+                except json.JSONDecodeError:
+                    pass
+            
+            # 如果LLM无法生成有效的JSON，使用基于规则的回退方法
+            print(f"LLM未能生成有效JSON，使用回退方法")
+            return self._create_fallback_graph(query, intent_info)
+                    
+        except Exception as e:
+            print(f"使用LLM规划任务图时出错: {str(e)}，使用回退方法")
+            return self._create_fallback_graph(query, intent_info)
+    
+    def _create_fallback_graph(self, query: str, intent_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        回退方法：基于规则创建执行图
+        
+        Args:
+            query: 用户查询
+            intent_info: 意图分析信息
+            
+        Returns:
+            执行图配置
+        """
+        # 根据意图类型创建不同的执行路径
+        intents = intent_info.get("intents", [])
+        tasks = []
+        
+        # 根据意图分析结果生成任务
+        for idx, intent in enumerate(intents):
+            task_id = f"{intent.lower()}_{idx}"
+            
+            if intent == "SecurityAnalysis":
+                tasks.append({
+                    "id": task_id,
+                    "agent": "SecurityAnalysisAgent",
+                    "action": "analyze_threat",
+                    "input": query,
+                    "dependencies": []
+                })
+            elif intent == "KnowledgeQuery":
+                tasks.append({
+                    "id": task_id,
+                    "agent": "KnowledgeAgent",
+                    "action": "process",
+                    "input": query,
+                    "dependencies": []
+                })
+            elif intent == "FileUnderstanding":
+                # 如果是文件理解意图，需要特殊处理
+                tasks.append({
+                    "id": task_id,
+                    "agent": "FileUnderstandingAgent",
+                    "action": "process",
+                    "input": query,
+                    "dependencies": []
+                })
+            elif intent == "Fallback" or intent == "SafeAnswer":
+                tasks.append({
+                    "id": task_id,
+                    "agent": "KnowledgeAgent",  # 使用知识智能体提供引导
+                    "action": "search_web_knowledge",
+                    "input": "网络安全基础知识 " + query,
+                    "dependencies": []
+                })
+        
+        # 如果没有识别出特定意图，创建默认安全分析任务
+        if not tasks:
+            tasks.append({
+                "id": "default_security_analysis",
+                "agent": "SecurityAnalysisAgent",
+                "action": "analyze_threat",
+                "input": query,
+                "dependencies": []
+            })
+        
+        # 如果有多个意图，考虑它们之间的依赖关系
+        if len(intents) > 1:
+            # 对于多意图情况，可能需要组合分析
+            combination_task_id = f"combination_analysis_{len(tasks)}"
+            tasks.append({
+                "id": combination_task_id,
+                "agent": "SecurityAnalysisAgent",
+                "action": "synthesize_findings",
+                "input": query,
+                "dependencies": [task["id"] for task in tasks[:-1]]  # 依赖之前的所有任务
+            })
+        
+        return {
+            "tasks": tasks,
+            "result_combination_strategy": self._get_combination_strategy(intent_info)
+        }
+    
+    def _get_combination_strategy(self, intent_info: Dict[str, Any]) -> str:
+        """
+        根据意图信息获取结果组合策略
+        
+        Args:
+            intent_info: 意图分析信息
+            
+        Returns:
+            结果组合策略描述
+        """
+        intents = intent_info.get("intents", [])
+        
+        if len(intents) == 1:
+            return "单一意图处理：直接返回对应智能体的结果"
+        elif "FileUnderstanding" in intents:
+            return "文件理解优先：先分析文件内容，再结合其他分析结果"
+        elif "KnowledgeQuery" in intents and "SecurityAnalysis" in intents:
+            return "知识+分析融合：先查询相关知识，再进行安全分析，最后整合结果"
+        else:
+            return "多意图并行：并行执行多个任务，然后汇总结果"
     
     def execute_single_task(self, agent_name: str, action: str, input_data: str) -> Dict[str, Any]:
         """
@@ -206,8 +369,8 @@ class OrchestratorAgent:
         Returns:
             处理结果
         """
-        # 生成执行计划
-        plan = self.plan_execution(query, intent_info)
+        # 生成动态执行图
+        plan = self.create_dynamic_graph(query, intent_info)
         
         # 执行计划
         result = self.execute_plan(plan, query)

@@ -4,7 +4,7 @@
 """
 from typing import Dict, Any
 from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
+from .llm_factory import create_llm
 from ..tools.file_tools import FileTools
 from ..tools.rag_tools import RAGTools
 from ..config import config
@@ -14,11 +14,7 @@ class FileUnderstandingAgent:
     """文件理解智能体类"""
     
     def __init__(self):
-        self.llm = ChatOpenAI(
-            model=config.MODEL_NAME,
-            temperature=0.2,
-            api_key=config.OPENAI_API_KEY
-        )
+        self.llm = create_llm(temperature=0.2)
         
         # 初始化相关工具
         self.file_tools = FileTools()

@@ -13,7 +13,10 @@ class Config(BaseModel):
     
     # LLM配置
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
     MODEL_NAME: str = os.getenv("MODEL_NAME", "gpt-4o")
+    DEEPSEEK_MODEL: str = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "openai")  # openai 或 deepseek
     
     # 数据库配置
     NEO4J_URI: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")

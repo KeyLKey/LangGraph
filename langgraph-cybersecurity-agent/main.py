@@ -3,16 +3,20 @@
 多智能体网络安全防护助手
 """
 import asyncio
-from src.workflow import CybersecurityWorkflow
+import os
+from dotenv import load_dotenv
+from src.advanced_workflow import AdvancedCybersecurityWorkflow
 from src.conversation_manager import conversation_manager
 
+# 加载环境变量
+load_dotenv()
 
 def main():
     """主函数"""
     print("=== 多智能体网络安全防护助手 ===\n")
     
     # 创建工作流实例
-    cybersecurity_agent = CybersecurityWorkflow()
+    cybersecurity_agent = AdvancedCybersecurityWorkflow()
     
     # 示例查询
     example_queries = [

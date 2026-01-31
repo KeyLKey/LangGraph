@@ -4,7 +4,7 @@
 """
 from typing import Dict, Any
 from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
+from .llm_factory import create_llm
 from ..tools.graph_tools import GraphTools
 from ..tools.web_tools import WebTools
 from ..tools.paper_tools import PaperTools
@@ -15,11 +15,7 @@ class KnowledgeAgent:
     """知识查询智能体类"""
     
     def __init__(self):
-        self.llm = ChatOpenAI(
-            model=config.MODEL_NAME,
-            temperature=0.1,
-            api_key=config.OPENAI_API_KEY
-        )
+        self.llm = create_llm(temperature=0.1)
         
         # 初始化相关工具
         self.graph_tools = GraphTools()

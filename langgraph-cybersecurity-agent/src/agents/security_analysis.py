@@ -4,7 +4,7 @@
 """
 from typing import Dict, Any
 from langchain_core.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
+from .llm_factory import create_llm
 from ..tools.rag_tools import RAGTools
 from ..tools.graph_tools import GraphTools
 from ..tools.web_tools import WebTools
@@ -15,11 +15,7 @@ class SecurityAnalysisAgent:
     """安全分析智能体类"""
     
     def __init__(self):
-        self.llm = ChatOpenAI(
-            model=config.MODEL_NAME,
-            temperature=0.3,
-            api_key=config.OPENAI_API_KEY
-        )
+        self.llm = create_llm(temperature=0.3)
         
         # 初始化相关工具
         self.rag_tools = RAGTools()
